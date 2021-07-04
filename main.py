@@ -19,11 +19,7 @@ if __name__ == '__main__':
     #     'H': gdb_command_H
     # }
     # GDBServer(1234, "localhost", packets, irq).start()
-    dw = SerialDW('/dev/ttyUSB0', 8000000, True, True)
-    sleep(1)
-    dw._dw_cmd_break()
-    print(hexlify(dw.read_sram(0x100, 128)))
-    print(hexlify(dw.read_flash(0x0, 128)))
-    print(hexlify(dw.read_flash(128, 128)))
-
+    dw = SerialDW('/dev/ttyUSB0', 8000000)
+    # dw._dw_cmd_break()
+    print(dw.read_eeprom(0x00, 16))
     dw.close()
