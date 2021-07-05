@@ -2,7 +2,7 @@ from binascii import hexlify
 from time import sleep
 
 from dwire import CTRL_REG_IR, CTRL_REG_PC, CNTXT_GO_TO_HW_BREAKPOINT
-from dwire.DWInterface import DWInterface, FLASH_PAGE
+from dwire.DWInterface import DWInterface, FLASH_PAGE, INST_ADDR
 from dwire.SerialDW import SerialDW
 from dwire.gdb_impl.H import gdb_command_H
 from dwire.gdb_impl.v import gdb_command_v
@@ -28,10 +28,9 @@ if __name__ == '__main__':
 
     while True:
         print(f"PC={hex(dw.get_pc())}")
-        dw.set_hw_breakpoint(int(int(input("nex_addr (hex)> "), 16)/2))
-        dw.go_until_hit()
+        dw.set_hw_breakpoint(INST_ADDR(int(input("nex_addr (hex)> "), 16)))
+        dw.resume_execution(CNTXT_GO_TO_HW_BREAKPOINT, pc=-1)
         dw.wait_hit()
-        dw.cur_pc = int.to_bytes(int.from_bytes(dw.cur_pc, 'big')-1, 2, 'big')
         print("hit")
 
     dw.close()
