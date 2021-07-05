@@ -1,3 +1,7 @@
+REG_X = 0x1A
+REG_Y = 0x1C
+REG_Z = 0x1E
+
 def OUT(A, r):
     return int.to_bytes(0b1011100000000000 | ((r & 0x1F) << 4) | (A & 0x0F) | ((A & 0x30) << 5), 2, 'big')
 
@@ -22,3 +26,7 @@ def ADIW(w, K):
 
 def LDI(rd, K):
     return int.to_bytes(0b1110000000000000 | ((K & 0xF0) << 8) | (K & 0x0F) | ((rd & 0x0F) << 4), 2, 'big')
+
+
+def BREAK():
+    return int.to_bytes(0b1001010110011000, 2, 'big')

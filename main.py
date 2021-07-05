@@ -1,6 +1,8 @@
 from binascii import hexlify
 from time import sleep
 
+from dwire import CTRL_REG_IR, CTRL_REG_PC, CNTXT_GO_TO_HW_BREAKPOINT
+from dwire.DWInterface import DWInterface, FLASH_PAGE
 from dwire.SerialDW import SerialDW
 from dwire.gdb_impl.H import gdb_command_H
 from dwire.gdb_impl.v import gdb_command_v
@@ -19,14 +21,17 @@ if __name__ == '__main__':
     #     'H': gdb_command_H
     # }
     # GDBServer(1234, "localhost", packets, irq).start()
-    dw = SerialDW('/dev/ttyUSB0', 8000000)
-    # dw._dw_cmd_break()
-    print("PAGE 0\n\t", hexlify(dw.read_flash(0x00, 128)))
-    flash_content = dw.read_flash(128, 128)
-    print("PAGE 1\n\t", hexlify(flash_content))
-    flash_content = b'\x00\x01\x02\x03\x04' + flash_content[5:]
-    print("Attempt to write Page 1 (0x80) as\n\t", hexlify(flash_content))
+    dev = SerialDW('/dev/ttyUSB0', 8000000)
+    dw = DWInterface(dev)
+    dw.halt()
+    dw.restart_execution(False)
 
-    dw.write_flash(flash_content, 128, 1)
-    print("PAGE 1\n\t", hexlify(dw.read_flash(128, 128)))
+    while True:
+        print(f"PC={hex(dw.get_pc())}")
+        dw.set_hw_breakpoint(int(int(input("nex_addr (hex)> "), 16)/2))
+        dw.go_until_hit()
+        dw.wait_hit()
+        dw.cur_pc = int.to_bytes(int.from_bytes(dw.cur_pc, 'big')-1, 2, 'big')
+        print("hit")
+
     dw.close()

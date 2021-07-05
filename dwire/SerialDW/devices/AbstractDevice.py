@@ -5,6 +5,7 @@ class AbstractDevice:
     EEARL = None
     EEARH = None
     DWRD = None
+    SPMCSR = 0x37
 
     def __init__(self):
         assert False
