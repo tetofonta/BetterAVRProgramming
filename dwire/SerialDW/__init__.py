@@ -303,13 +303,13 @@ class SerialDW(Serial):
     #     # D2 95 E8 33 spm
     #     # <00 55> 83 <55>
 
-    def exec(self, instruction, long_instruction=False, ret_len=0):
+    def exec(self, instruction, long_instruction=False, ret_len=0, aux=b''):
         if type(instruction) is list:
             for i in instruction:
                 assert type(i) is bytes
                 return self.exec(instruction, long_instruction)
         assert len(instruction) == 2
-        return self.dw_cmd(b'\xD2' + instruction + (b'\x23' if not long_instruction else b'\x33'), ret_len if not long_instruction else 2)
+        return self.dw_cmd(b'\xD2' + instruction + (b'\x23' if not long_instruction else b'\x33') + aux, ret_len if not long_instruction else 2+ret_len)
 
     def read_eeprom(self, addr, len):
         assert len >= 1
@@ -337,12 +337,11 @@ class SerialDW(Serial):
             data = data[:length]
         # can be far more optimized =(
         for i in range(len(data)):
-            self.write_registers(b'\x04\x02\x01\x01' + int.to_bytes(addr + i, 2, 'little'), 0x1C)
+            self.write_registers(b'\x04\x02\x01\x01' + int.to_bytes(addr + i, 2, 'little'), 0x1A)
             self._dw_set_cntxt(self.CNTXT_WRT_FLASH, True)  # change context
             self.exec(OUT(self.dev.EEARH, 31))
             self.exec(OUT(self.dev.EEARL, 30))
-            self.exec(IN(0, self.dev.DWRD))
-            self.dw_cmd(bytes([data[i]]), 0)
+            self.exec(IN(0, self.dev.DWRD), aux=bytes([data[i]]))
             self.exec(OUT(self.dev.EEDR, 0))
             self.exec(OUT(self.dev.EECR, 26))
             self.exec(OUT(self.dev.EECR, 27))

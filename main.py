@@ -21,5 +21,7 @@ if __name__ == '__main__':
     # GDBServer(1234, "localhost", packets, irq).start()
     dw = SerialDW('/dev/ttyUSB0', 8000000)
     # dw._dw_cmd_break()
-    print(dw.read_eeprom(0x00, 16))
+    print(dw.read_eeprom(0x01, 1))
+    print(dw.write_eeprom(b'B', 0x01))
+    print(dw.read_eeprom(0x01, 1))
     dw.close()
