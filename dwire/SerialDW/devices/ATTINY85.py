@@ -9,4 +9,5 @@ class DevATTINY85(AbstractDevice):
     EEARL = 0x1E
     EEARH = 0x1F
     DWRD = 0x22
+    SPMCSR = 0x37
 

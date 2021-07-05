@@ -21,7 +21,12 @@ if __name__ == '__main__':
     # GDBServer(1234, "localhost", packets, irq).start()
     dw = SerialDW('/dev/ttyUSB0', 8000000)
     # dw._dw_cmd_break()
-    print(dw.read_eeprom(0x01, 1))
-    print(dw.write_eeprom(b'B', 0x01))
-    print(dw.read_eeprom(0x01, 1))
+    print("PAGE 0\n\t", hexlify(dw.read_flash(0x00, 128)))
+    flash_content = dw.read_flash(128, 128)
+    print("PAGE 1\n\t", hexlify(flash_content))
+    flash_content = b'\x00\x01\x02\x03\x04' + flash_content[5:]
+    print("Attempt to write Page 1 (0x80) as\n\t", hexlify(flash_content))
+
+    dw.write_flash(flash_content, 128, 1)
+    print("PAGE 1\n\t", hexlify(dw.read_flash(128, 128)))
     dw.close()

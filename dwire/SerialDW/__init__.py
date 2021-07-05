@@ -4,17 +4,9 @@ from binascii import hexlify
 from serial import Serial
 
 from dwire.SerialDW.devices import devices
+from dwire.avr import OUT, IN, MOVW, SPM, ADIW, LDI
 
 _dw_baud_divisor_bytes = [b'\xA3', b'\xA2', b'\xA1', b'\xA0', b'\x80', b'\x81', b'\x82', b'\x83']
-
-
-def OUT(A, r):
-    return int.to_bytes(0b1011100000000000 | ((r & 0x1F) << 4) | (A & 0x0F) | ((A & 0x30) << 5), 2, 'big')
-
-
-def IN(r, A):
-    return int.to_bytes(0b1011000000000000 | ((r & 0x1F) << 4) | (A & 0x0F) | ((A & 0x30) << 5), 2, 'big')
-
 
 class SerialDW(Serial):
     def __init__(self, port, target_frequency, break_execution=True, reset_execution=False):
@@ -222,9 +214,9 @@ class SerialDW(Serial):
         self._setup_register_rw(start_register, end_register, self.TRGT_REGS_W)
         self.dw_cmd(data, 0)
 
-    def read_sram(self, addr, len):
+    def read_mem(self, addr, len, target):
         """
-        Do not read addresses 30, 31 or DWDR as these interfere with the read process. should not exceed 128bytes at a time
+        Do not read addresses 30, 31 or DWDR of sram as these interfere with the read process. should not exceed 128bytes at a time
         :param addr:
         :param len:
         :return:
@@ -233,9 +225,12 @@ class SerialDW(Serial):
         self.write_registers(int.to_bytes(addr, 2, 'little'), 0x1E, 2)  # set address in Z reg - sends 66 too
         self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_PC, b'\x00\x00')
         self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_HWBP, int.to_bytes(len * 2, 2, 'big'))
-        self._dw_set_rw_destination(SerialDW.TRGT_SRAM_R)
+        self._dw_set_rw_destination(target)
         self._dw_cmd_start_mem_cycle()
         return self.read(len)
+
+    def read_sram(self, addr, len):
+        return self.read_mem(addr, len, SerialDW.TRGT_SRAM_R)
 
     def write_sram(self, data, addr, length=None):
         """
@@ -255,53 +250,52 @@ class SerialDW(Serial):
         self._dw_cmd_start_mem_cycle()
         self.dw_cmd(data, 0)
 
-    # def read_flash(self, addr, len):
-    #     #todo refactor, this is the same as sram read :(
-    #     assert 1 <= len
-    #     self.write_registers(int.to_bytes(addr, 2, 'little'), 0x1E, 2)  # set address in Z reg - sends 66 too
-    #     self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_PC, b'\x00\x00')
-    #     self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_HWBP, int.to_bytes(len * 2, 2, 'big'))
-    #     self._dw_set_rw_destination(SerialDW.TRGT_FLASH)
-    #     self._dw_cmd_start_mem_cycle()
-    #     return self.read(len)
-    #
-    # def write_flash(self, data, addr, length=None):
-    #     if length is not None:
-    #         data = data[:length]
-    #
-    #     #setup X, Y, Z
-    #     self.write_registers(b'\x03\x01\x05\x40\x00\x00', 0x1A) #todo understand the code
-    #
-    #     #set pc inside boot region
-    #     self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_PC, b'\x1F\x00')
-    #
-    #     # 66 -> done in write_registers
-    #     #                           |X   | Y   | Z   |
-    #     # D0 00 1A D1 00 20 C2 05 20 03 01 05 40 00 00 -- Set X, Y, Z
-    #     # D0 1F 00                                     -- Set PC to 0x1F00, inside the boot section to enable spm--
-    #     # 64
-    #     # D2  01 CF  23        -- movw r24,r30
-    #     # D2  BF A7  23        -- out SPMCSR,r26 = 03 = PGERS
-    #     # D2  95 E8  33        -- spm
-    #     # <00 55> 83 <55>
-    #     # 44 - before the first one
-    #     # And then repeat the following until the page is full.
-    #     # D0  1F 00            -- set PC to bootsection for spm to work
-    #     # D2  B6 01  23 ll     -- in r0,DWDR (ll)
-    #     # D2  B6 11  23 hh     -- in r1,DWDR (hh)
-    #     # D2  BF B7  23        -- out SPMCSR,r27 = 01 = SPMEN
-    #     # D2  95 E8  23        -- spm
-    #     # D2  96 32  23        -- adiw Z,2
-    #     # D0 1F 00
-    #     # D2 01 FC 23 movw r30,r24
-    #     # D2 BF C7 23 out SPMCSR,r28 = 05 = PGWRT
-    #     # D2 95 E8 33 spm
-    #     # <00 55>
-    #     # D0 1F 00
-    #     # D2 E1 C1 23 ldi r28,0x11
-    #     # D2 BF C7 23 out SPMCSR,r28 = 11 = RWWSRE
-    #     # D2 95 E8 33 spm
-    #     # <00 55> 83 <55>
+    def read_flash(self, addr, len):
+        return self.read_mem(addr, len, SerialDW.TRGT_FLASH)
+
+    def write_flash(self, data, addr, pages=None):
+        if pages is not None:
+            data = data[:pages*128]
+
+        # write XYZ registers
+        self.write_registers(b'\x03\x01\x05\x40' + int.to_bytes(addr, 2, 'little'), 0x1A)
+
+        # set pc inside boot region (allows spm)
+        self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_PC, b'\x1F\x00')
+
+        self._dw_set_cntxt(self.CNTXT_WRT_FLASH, True)  # change context 64 - code execution
+        self.exec(MOVW(24, 30)) # saves a copy of the start address to r24:r25
+        self.exec(OUT(self.dev.SPMCSR, 26)) # SPMCSR = 0x03 -> flash page erase
+        self.exec(SPM(), True)
+
+        assert self.dw_cmd(b'\x83', 1) == b'\x55' # -> set baudrate after reset TODO
+        # Erased page @ address
+
+        self._dw_set_cntxt(self.CNTXT_WRT_FLASH)  # change context 44
+        # And then repeat the following until the page is full.
+        data = [data[i:i+2] for i in range(0, len(data), 2)]
+        for i in data:
+            self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_PC, b'\x1F\x00') # make spm possible
+            self.exec(IN(0, self.dev.DWRD), aux=bytes([i[0]])) # load r0 with low byte
+            self.exec(IN(1, self.dev.DWRD), aux=bytes([i[1]])) # load r1 with high byte
+            #written value in r0:r1
+            #address has been already set in Z before
+            self.exec(OUT(self.dev.SPMCSR, 27)) #write SPMCS = 1 --> prepare for buffer fill at [Z]
+            self.exec(SPM())
+            self.exec(ADIW(3, 2)) #increment Z + 2 (next word)
+
+        self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_PC, b'\x1F\x00')
+        self.exec(MOVW(30, 24)) # restore original address after buffer fill
+        self.exec(OUT(self.dev.SPMCSR, 28)) # SPMCSR = 5 -> write to page
+        self.exec(SPM(), True) #execute page write
+        #why not baud reset?
+
+        self._dw_wrt_ctrl_reg_word(SerialDW.CTRL_REG_PC, b'\x1F\x00')
+        self.exec(LDI(28, 0x11))
+        self.exec(OUT(self.dev.SPMCSR, 28))
+        self.exec(SPM(), True)
+        assert self.dw_cmd(b'\x83', 1) == b'\x55' #??
+        #performs RWWSRE (clears the buffer) IS THIS NOT NECESSARY?
 
     def exec(self, instruction, long_instruction=False, ret_len=0, aux=b''):
         if type(instruction) is list:
