@@ -181,7 +181,6 @@ class DWInterface:
         page = page[0: offset] + instruction + page[offset+2:]
         self.write_flash_page(self.device.dev.FLASH_PAGEEND*page_idx, page)
         self.sw_breakpoints.pop(address)
-        print(self.sw_breakpoints)
         print(f"Breakpoint set substituting instruction {instruction}@{hex(address)}")
 
     @running
@@ -263,7 +262,7 @@ class DWInterface:
     @preserve_hwbp
     @preserve_register(24, 8)
     @preserve_register(0, 2)
-    def write_flash_page(self, address, data, progress=False):
+    def write_flash_page(self, address, data, progress=True):
         assert len(data) == self.device.dev.FLASH_PAGEEND
         self.device.write_flash_page(data, address, progress=progress)
 
@@ -276,7 +275,8 @@ class DWInterface:
         self.device.clear_flash_page(address)
 
     def close(self):
-        #todo remove sw breakpoints
+        for k in list(self.sw_breakpoints.keys()):
+            self.remove_sw_breakpoint(k)
         self.device.close()
 
     def status(self):
@@ -310,6 +310,11 @@ class DWInterface:
                 page = page + bytes([0xff] * (self.device.dev.FLASH_PAGEEND - len(page)))
                 firmware_pages.append(page)
 
+        if erease_device:
+            print("Clearing device")
+            for i in tqdm(range(0, int(self.device.dev.FLASH_SIZE), self.device.dev.FLASH_PAGEEND)):
+                self.device.clear_flash_page(i)
+
         addr = 0x00
         for i in firmware_pages:
             if debug:
@@ -325,3 +330,4 @@ class DWInterface:
                 page = self.read_flash(addr)
                 addr += self.device.dev.FLASH_PAGEEND
                 assert i == page
+

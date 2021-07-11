@@ -10,5 +10,11 @@ class DevATTINY85(AbstractDevice):
     EEARH = 0x1F
     DWRD = 0x22
     SPMCSR = 0x37
+
+    FLASH_SIZE = 8192
+    EEPROM_SIZE = 512
+    SRAM_SIZE = 512
+    SRAM_BASE = 0x60
+
     FLASH_PAGEEND = 64
 

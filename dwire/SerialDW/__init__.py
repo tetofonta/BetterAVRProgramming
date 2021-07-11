@@ -49,8 +49,15 @@ class SerialDW(Serial):
     def dw_cmd(self, cmd: bytes, response_length: int):
         self.reset_input_buffer()
         self.write(cmd)
-        assert self.read(len(cmd)) == cmd
-        return self.read(response_length) if response_length > 0 else None
+
+        r = self.read(len(cmd))
+        if r != cmd:
+            print(f"ERROR: {cmd}, {r}")
+            assert False
+
+        returned = self.read(response_length) if response_length > 0 else None
+        # print(f"{hexlify(cmd)} - answ: {hexlify(returned if returned is not None else b'')}")
+        return returned
 
     def _dw_cmd_break(self):
         """
