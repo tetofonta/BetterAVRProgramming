@@ -2,6 +2,8 @@ import math
 from binascii import hexlify
 
 from serial import Serial
+from tqdm import tqdm
+
 from dwire import *
 from dwire.SerialDW.devices import devices
 from dwire.avr import OUT, IN, MOVW, SPM, ADIW, LDI, REG_Z, REG_Y, REG_X
@@ -86,13 +88,13 @@ class SerialDW(Serial):
         """
         return self.dw_cmd(b'\xf3', 2)
 
-    def _dw_cmd_continue(self):
+    def _dw_cmd_continue(self, cmd=CONTINUE):
         """
         tells the target to continue the program execution from where the pc is set
         :return:
         """
         self.is_running = True
-        return self.dw_cmd(b'\x30', 0)
+        return self.dw_cmd(cmd, 0)
 
     def _dw_cmd_disable(self):
         """
@@ -175,11 +177,14 @@ class SerialDW(Serial):
     def _dw_read_ctrl_reg_low(self, ctrl_reg):
         return self.dw_cmd(bytes([0xE0 | ctrl_reg]), 1)
 
-    def resume_execution(self, pc_address=None, context=CNTXT_GO_TO_HW_BREAKPOINT, disable_timers=False):
+    def resume_execution(self, pc_address=None, context=CNTXT_GO_TO_HW_BREAKPOINT, disable_timers=False, cmd=CONTINUE):
         if pc_address is not None:
             self._dw_wrt_ctrl_reg_word(CTRL_REG_PC, pc_address)
         self._dw_set_cntxt(context, disable_timers)
-        self._dw_cmd_continue()
+        self._dw_cmd_continue(cmd)
+
+    def load_instruction(self, instruction):
+        self.dw_cmd(b'\xD2' + instruction, 0)
 
     def exec(self, instruction, long_instruction=False, ret_len=0, aux=b''):
         if type(instruction) is list:
@@ -187,6 +192,7 @@ class SerialDW(Serial):
                 assert type(i) is bytes
                 return self.exec(instruction, long_instruction)
         assert len(instruction) == 2
+
         return self.dw_cmd(b'\xD2' + instruction + (b'\x23' if not long_instruction else b'\x33') + aux, ret_len if not long_instruction else 2+ret_len)
 
     def _setup_register_rw(self, start_register, end_register, target):
@@ -248,7 +254,21 @@ class SerialDW(Serial):
     def read_flash(self, addr, len):
         return self.read_mem(addr, len, SerialDW.TRGT_FLASH)
 
-    def write_flash_page(self, data, addr, clear_wrt_buf=True):
+    def clear_flash_page(self, addr):
+        # write XYZ registers
+        self.write_registers(b'\x03\x01\x05\x40' + int.to_bytes(addr, 2, 'little'), REG_X)
+
+        # set pc inside boot region (allows spm)
+        self._dw_wrt_ctrl_reg_word(CTRL_REG_PC, b'\x1F\x00')
+
+        self._dw_set_cntxt(CNTXT_WRT_FLASH, True)  # change context 64 - code execution
+        self.exec(OUT(self.dev.SPMCSR, 26))  # SPMCSR = 0x03 -> flash page erase
+        self.exec(SPM(), True)
+
+        self._dw_cmd_set_baud_rate(self.divisor)
+        # Erased page @ address
+
+    def write_flash_page(self, data, addr, clear_wrt_buf=True, progress=False):
         # write XYZ registers
         self.write_registers(b'\x03\x01\x05\x40' + int.to_bytes(addr, 2, 'little'), REG_X)
 
@@ -266,7 +286,7 @@ class SerialDW(Serial):
         self._dw_set_cntxt(CNTXT_WRT_FLASH)  # change context 44
         # And then repeat the following until the page is full.
         data = [data[i:i+2] for i in range(0, len(data), 2)]
-        for i in data:
+        for i in (tqdm(data) if progress else data):
             self._dw_wrt_ctrl_reg_word(CTRL_REG_PC, b'\x1F\x00') # make spm possible
             self.exec(IN(0, self.dev.DWRD), aux=bytes([i[0]])) # load r0 with low byte
             self.exec(IN(1, self.dev.DWRD), aux=bytes([i[1]])) # load r1 with high byte
@@ -280,7 +300,7 @@ class SerialDW(Serial):
         self.exec(MOVW(30, 24)) # restore original address after buffer fill
         self.exec(OUT(self.dev.SPMCSR, 28)) # SPMCSR = 5 -> write to page
         self.exec(SPM(), True) #execute page write
-        self._dw_cmd_set_baud_rate(self.divisor) #Just because i can...
+        #self._dw_cmd_set_baud_rate(self.divisor) #Just because i can...
 
         if clear_wrt_buf:
             #performs RWWSRE (clears the buffer) IS THIS NOT NECESSARY?

@@ -51,10 +51,12 @@ def read_packet(sok: socket, interrupt):
     return data
 
 
-def answer(sok: socket, data, success=True):
+def answer(sok: socket, state, data=b"", success=True):
     packet = b''
     if success is not None:
         sok.send(b'+' if success else b'-')
+    if not state["ack"]:
+        success = None
 
     if data is not None:
         send_data, checksum = escape(data)

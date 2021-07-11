@@ -1,11 +1,14 @@
+import os
 from binascii import hexlify
 from functools import partial
+from math import ceil
 
 from serial import Serial
+from tqdm import tqdm
 
 from dwire import *
 from dwire.SerialDW import SerialDW #todo abstraction of this class
-from dwire.avr import REG_Z, REG_Y, REG_X
+from dwire.avr import REG_Z, REG_Y, REG_X, BREAK, FLASH_INSTRUCTION
 
 
 def FLASH_PAGE(pages):
@@ -68,6 +71,7 @@ class DWInterface:
     def __init__(self, device: SerialDW):
         self.device = device
         self.cur_pc = b'\x00\x00' #the effective value of the program counter
+        self.sw_breakpoints = {} #dict address -> instruction
 
     def halt(self):
         """
@@ -99,7 +103,11 @@ class DWInterface:
             pc_value = int.to_bytes(pc_value, 2, 'big')
 
         print(f"Resuming execution. PC={hexlify(pc_value).decode()}")
-        self.device.resume_execution(pc_value, cntxt, False)
+        if self.halt_reason() == 'swbreak':
+            self.device.load_instruction(FLASH_INSTRUCTION(self.sw_breakpoints[(int.from_bytes(self.cur_pc, 'big')*2)-2]))
+            self.device.resume_execution(pc_value, cntxt, False, cmd=CONTINUE_WITH_LOADED_INST)
+        else:
+            self.device.resume_execution(pc_value, cntxt, False, cmd=CONTINUE)
         self.cur_pc = pc_value
 
     def restart_execution(self, resume=True, context=CNTXT_GO_INDEFINITLY):
@@ -147,8 +155,34 @@ class DWInterface:
         print(f"Set hw-breakpoint to {hexlify(address).decode()}")
 
     def set_sw_breakpoint(self, address: int):
-        #todo rewrite flash page using break instruction
-        assert False
+        """
+        :param address: memory address (not instruction address)
+        :return:
+        """
+        page_idx = int(address / self.device.dev.FLASH_PAGEEND)
+        offset = address % self.device.dev.FLASH_PAGEEND
+        page = self.read_flash(self.device.dev.FLASH_PAGEEND * page_idx, self.device.dev.FLASH_PAGEEND)
+        instruction = page[offset:offset + 2]
+        page = page[0: offset] + FLASH_INSTRUCTION(BREAK()) + page[offset + 2:]
+        self.write_flash_page(self.device.dev.FLASH_PAGEEND * page_idx, page)
+        self.sw_breakpoints[address] = instruction
+        print(f"Breakpoint set substituting instruction {instruction}@{hex(address)}")
+
+    def remove_sw_breakpoint(self, address: int):
+        """
+        :param address: memory address (not instruction address)
+        :return:
+        """
+        page_idx = int(address/self.device.dev.FLASH_PAGEEND)
+        offset = address % self.device.dev.FLASH_PAGEEND
+        page = self.read_flash(self.device.dev.FLASH_PAGEEND*page_idx, self.device.dev.FLASH_PAGEEND)
+        assert page[offset:offset+2] == b'\x98\x95'
+        instruction = self.sw_breakpoints[address]
+        page = page[0: offset] + instruction + page[offset+2:]
+        self.write_flash_page(self.device.dev.FLASH_PAGEEND*page_idx, page)
+        self.sw_breakpoints.pop(address)
+        print(self.sw_breakpoints)
+        print(f"Breakpoint set substituting instruction {instruction}@{hex(address)}")
 
     @running
     def wait_hit(self, timeout=None):
@@ -219,7 +253,9 @@ class DWInterface:
     @preserve_pc
     @preserve_hwbp
     @preserve_register(REG_Z, 2)
-    def read_flash(self, address: int, len=128):
+    def read_flash(self, address: int, len = None):
+        if len is None:
+            len = self.device.dev.FLASH_PAGEEND
         return self.device.read_flash(address, len)
 
     @halted
@@ -227,9 +263,17 @@ class DWInterface:
     @preserve_hwbp
     @preserve_register(24, 8)
     @preserve_register(0, 2)
-    def write_flash_page(self, address, data):
-        assert len(data) == 128
-        self.device.write_flash_page(data, address)
+    def write_flash_page(self, address, data, progress=False):
+        assert len(data) == self.device.dev.FLASH_PAGEEND
+        self.device.write_flash_page(data, address, progress=progress)
+
+    @halted
+    @preserve_pc
+    @preserve_hwbp
+    @preserve_register(24, 8)
+    @preserve_register(0, 2)
+    def clear_flash_page(self, address):
+        self.device.clear_flash_page(address)
 
     def close(self):
         #todo remove sw breakpoints
@@ -241,3 +285,43 @@ class DWInterface:
     @halted
     def get_pc(self):
         return int.from_bytes(self.device._dw_read_ctrl_reg_word(CTRL_REG_PC), 'big')
+
+    @halted
+    def halt_reason(self):
+        if (int.from_bytes(self.cur_pc, 'big')*2)-2 in self.sw_breakpoints:
+            return "swbreak"
+        if int.from_bytes(self.device._dw_read_ctrl_reg_word(CTRL_REG_HWBP), 'big') == int.from_bytes(self.cur_pc, 'big') - 1:
+            #pc increments one more
+            return "hwbreak"
+        return "unknown"
+
+    @halted
+    @preserve_pc
+    @preserve_hwbp
+    @preserve_register(24, 8)
+    @preserve_register(0, 2)
+    def write_firmware(self, file, verify=True, erease_device=False, debug=False):
+        firmware_pages = []
+        with open(file, 'rb') as fw:
+            while True:
+                page = fw.read(self.device.dev.FLASH_PAGEEND)
+                if not page:
+                    break
+                page = page + bytes([0xff] * (self.device.dev.FLASH_PAGEEND - len(page)))
+                firmware_pages.append(page)
+
+        addr = 0x00
+        for i in firmware_pages:
+            if debug:
+                print(f"Writing addr={addr}\t\tdata={i}")
+            print(f"page {int(addr/64)+1}/{len(firmware_pages)}", end='')
+            self.device.write_flash_page(i, addr, progress=True)
+            addr += self.device.dev.FLASH_PAGEEND
+
+        if verify:
+            addr = 0
+            print("Verifying...")
+            for i in tqdm(firmware_pages):
+                page = self.read_flash(addr)
+                addr += self.device.dev.FLASH_PAGEEND
+                assert i == page

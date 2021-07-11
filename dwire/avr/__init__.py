@@ -30,3 +30,12 @@ def LDI(rd, K):
 
 def BREAK():
     return int.to_bytes(0b1001010110011000, 2, 'big')
+
+
+def FLASH_INSTRUCTION(instruction: bytes):
+    """
+    Flash instruction has to be written as little endian (first byte is the lower address), but we have to write the instruction bigendian inside the register with D2
+    :param instruction:
+    :return:
+    """
+    return int.to_bytes(int.from_bytes(instruction, 'big'), len(instruction), 'little')

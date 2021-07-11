@@ -10,4 +10,5 @@ class DevATTINY85(AbstractDevice):
     EEARH = 0x1F
     DWRD = 0x22
     SPMCSR = 0x37
+    FLASH_PAGEEND = 64
 
