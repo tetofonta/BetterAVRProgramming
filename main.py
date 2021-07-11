@@ -26,7 +26,6 @@ if __name__ == '__main__':
     # srv.start()
     # signal.signal(signal.SIGINT, lambda sig, frame: terminate(dw, srv, sig))
 
-    dw.write_firmware("/home/stefano/avrtest/blink2.bin", erease_device=True)
-    dw.restart_execution(False)
-    dw.set_sw_breakpoint(0x36)
+    dw.write_firmware("./avrtest/main.flash.bin", erease_device=False)
+    dw.restart_execution()
     dw.close()
