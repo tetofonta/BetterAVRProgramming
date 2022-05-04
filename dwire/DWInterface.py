@@ -204,7 +204,7 @@ class DWInterface:
 
     @halted
     def get_fingerprint(self):
-        self.device._dw_cmd_fingerprint()
+        return self.device._dw_cmd_fingerprint()
 
     @halted
     @preserve_pc

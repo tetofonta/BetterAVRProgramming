@@ -47,19 +47,19 @@ def read_packet(sok: socket, interrupt):
         print(f"Wrong packet checksum {data} {checksum} {packet_checksum}")
         answer(sok, None, False)
         return None
-    print(f"<- {data}")
+    print(f"recv <- {data}")
     return data
 
 
-def answer(sok: socket, state, data=b"", success=True):
+def answer(sok: socket, ack, data=b"", success=True):
     packet = b''
     if success is not None:
         sok.send(b'+' if success else b'-')
-    if not state["ack"]:
+    if not ack:
         success = None
 
     if data is not None:
         send_data, checksum = escape(data)
         packet = b'$' + send_data + b'#' + ('0' + hex(checksum)[2:])[-2:].encode()
         sok.send(packet)
-    print(f"-> {'+' if success else '-' if success is not None else ''} {packet}")
+    print(f"answ -> {'+' if success else '-' if success is not None else ''} {packet}")

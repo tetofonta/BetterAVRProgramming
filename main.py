@@ -4,7 +4,6 @@ from binascii import hexlify
 from dwire import CNTXT_GO_TO_HW_BREAKPOINT
 from dwire.DWInterface import DWInterface, INST_ADDR
 from dwire.SerialDW import SerialDW
-from dwire.gdb_impl import packets
 from gdb.GDBServer import GDBServer
 
 
@@ -21,11 +20,14 @@ def terminate(dw, srv, sig):
 
 
 if __name__ == '__main__':
-    dw = DWInterface(SerialDW('/dev/ttyUSB0', 8000000, True, True))
-    # srv = GDBServer(1234, "localhost", packets, irq, {"dev": dw})
-    # srv.start()
-    # signal.signal(signal.SIGINT, lambda sig, frame: terminate(dw, srv, sig))
+    #dw = DWInterface(SerialDW('/dev/ttyUSB0', 8000000, True, True))
+    srv = GDBServer('sock', irq)
+    srv.start()
+    signal.signal(signal.SIGINT, lambda sig, frame: terminate(None, srv, sig))
 
-    dw.write_firmware("./avrtest/main.flash.bin", erease_device=False)
-    dw.restart_execution()
-    dw.close()
+    #dw.halt()
+    #f = dw.get_fingerprint()
+
+    # dw.write_firmware("./avrtest/main.flash.bin", erease_device=False)
+    # dw.restart_execution()
+    #dw.close()
