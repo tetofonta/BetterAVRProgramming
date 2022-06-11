@@ -215,22 +215,34 @@ class DWInterface:
     @halted
     @preserve_pc
     @preserve_hwbp
-    def write_register(self, register: int, data:bytes, length=None):
+    def write_register(self, register: int, data: bytes, length=None):
         return self.device.write_registers(data, register, length)
 
     @halted
     @preserve_pc
     @preserve_hwbp
     @preserve_register(REG_Z, 2)
-    def read_sram(self, address: int, len: int):
+    def read_ram(self, address: int, len: int):
         return self.device.read_sram(address, len)
 
     @halted
     @preserve_pc
     @preserve_hwbp
     @preserve_register(REG_Z, 2)
-    def write_sram(self, address: int, data: bytes, length=None):
+    def write_ram(self, address: int, data: bytes, length=None):
         self.device.write_sram(data, address, length)
+
+    def read_io_space(self, address: int, len: int):
+        return self.read_ram(address + 0x20, len)
+
+    def read_sram(self, address: int, len: int):
+        return self.read_ram(address + 0x60, len)
+
+    def write_io_space(self, address: int, data: bytes, len: int):
+        return self.write_ram(address + 0x20, data, len)
+
+    def write_sram(self, address: int, data: bytes, len: int):
+        return self.write_ram(address + 0x60, data, len)
 
     @halted
     @preserve_pc
@@ -293,7 +305,7 @@ class DWInterface:
         if int.from_bytes(self.device._dw_read_ctrl_reg_word(CTRL_REG_HWBP), 'big') == int.from_bytes(self.cur_pc, 'big') - 1:
             #pc increments one more
             return "hwbreak"
-        return "unknown"
+        return "S05"
 
     @halted
     @preserve_pc

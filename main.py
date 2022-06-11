@@ -20,8 +20,9 @@ def terminate(dw, srv, sig):
 
 
 if __name__ == '__main__':
-    #dw = DWInterface(SerialDW('/dev/ttyUSB0', 8000000, True, True))
-    srv = GDBServer('sock', irq)
+    dw = DWInterface(SerialDW('/dev/ttyUSB0', 8000000, True, True))
+
+    srv = GDBServer('sock', irq, dw)
     srv.start()
     signal.signal(signal.SIGINT, lambda sig, frame: terminate(None, srv, sig))
 

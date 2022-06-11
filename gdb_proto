@@ -43,9 +43,16 @@ $QC01#f5
 $qOffsets#4b
 $#00
 
-$g#67
-$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa00ff0800000000#54
+f908 9a00 0000
 
+SREG           0x2                 2
+SP             0x8f9               0x8008f9
+PC2            0x9a                154
+pc             0x4d                0x9a <main+10>
+
+$g#67
+$ aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa 00   ff 08  00 00 00 00 #54
+  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 sreg sp sp
 $qfThreadInfo#bb
 $m1#9e
 
