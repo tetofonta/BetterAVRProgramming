@@ -1,6 +1,16 @@
-# MakingArduinoProgrammingGreat
-i think arduino ide is good for beginners but is a nightmare to use.
-And it lacks a debugger.
+# Project aim
+
+The first part of this project aims to build a debugWire debugger with common available hardware like a standard usb-to-serial converter (FT232).
+
+This is implemented in software (python) and is composed of two parts: the debugWire Implementation through serial interface, and a small implementation of a gdb remote target server to be able to debug the target with gdb (avr-gdb).
+
+The second part of this project may consist of developing an arduino-like board capable of isp programming, debug interface and serial converter.
+
+## Why
+
+Atmel debugWire is actually supported on the standard avr programmers (Dragon-obsolate, JTAGICE-obsolete, Xplained boards) which are usable only with Atmel Studio.
+
+What if we already have an arduino?
 
 # My setup
 ## Hardware

@@ -154,6 +154,7 @@ class DWInterface:
         self.device._dw_wrt_ctrl_reg_word(CTRL_REG_HWBP, address)
         print(f"Set hw-breakpoint to {hexlify(address).decode()}")
 
+    @halted
     def set_sw_breakpoint(self, address: int):
         """
         :param address: memory address (not instruction address)
@@ -168,6 +169,7 @@ class DWInterface:
         self.sw_breakpoints[address] = instruction
         print(f"Breakpoint set substituting instruction {instruction}@{hex(address)}")
 
+    @halted
     def remove_sw_breakpoint(self, address: int):
         """
         :param address: memory address (not instruction address)
@@ -205,6 +207,11 @@ class DWInterface:
     @halted
     def get_fingerprint(self):
         return self.device._dw_cmd_fingerprint()
+    
+    @halted
+    def step(self):
+        # TODO slow loaded instruction?
+        return self.device._dw_cmd_single_step()
 
     @halted
     @preserve_pc
