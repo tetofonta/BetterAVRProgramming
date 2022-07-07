@@ -66,7 +66,6 @@ def running(function):
         return function(self, *args, **kwargs)
     return _running
 
-
 class DWInterface:
     def __init__(self, device: SerialDW):
         self.device = device
@@ -82,6 +81,10 @@ class DWInterface:
         self.breaked = True
         self.cur_pc = self.device._dw_read_ctrl_reg_word(CTRL_REG_PC)
         print(f"MCU Break. PC={hexlify(self.cur_pc).decode()}")
+
+    @halted
+    def reset(self):
+        self.device._dw_cmd_reset()
 
     @halted
     def resume_execution(self, cntxt=CNTXT_GO_INDEFINITLY, pc=None, rel=False):
@@ -209,9 +212,14 @@ class DWInterface:
         return self.device._dw_cmd_fingerprint()
     
     @halted
-    def step(self):
+    def step(self, times=1):
         # TODO slow loaded instruction?
-        return self.device._dw_cmd_single_step()
+        ret = []
+        while times > 0:
+            ret.append(self.device._dw_cmd_single_step())
+            times -= 1
+        self.cur_pc = self.device._dw_read_ctrl_reg_word(CTRL_REG_PC)
+        return ret[0] if len(ret) == 1 else ret
 
     @halted
     @preserve_pc

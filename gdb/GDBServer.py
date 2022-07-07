@@ -132,5 +132,5 @@ class GDBServer(socket.socket):
         pc = hexlify(int.to_bytes(self.dw.get_pc()-1, 2, 'little'))
         answ(gpreg + sreg + sp + pc + pc2)
 
-    @command('v')
-    def
+    #@command('v')
+    #def

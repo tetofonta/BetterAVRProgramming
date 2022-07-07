@@ -1,6 +1,6 @@
 
 elf: main.c
-	avr-gcc main.c -o main.elf -ggdb -Os -mmcu=attiny85
+	avr-gcc main.c -o main.elf -ggdb -Os -mmcu=attiny85 -Wl,--verbose -Xlinker -Map=output.map -T linker.ld
 	avr-size -A main.elf
 
 eeprom_image: main.elf
